@@ -1,11 +1,8 @@
 # syntax=docker/dockerfile:1
-
 ARG TERRAFORM_VERSION=1.6.0
-
 FROM alpine:3.20 AS terraform-download
 ARG TERRAFORM_VERSION
 ARG TARGETARCH
-
 RUN apk add --no-cache ca-certificates curl unzip \
     && case "${TARGETARCH:-$(apk --print-arch)}" in \
         amd64|x86_64) terraform_arch=amd64 ;; \
@@ -18,24 +15,16 @@ RUN apk add --no-cache ca-certificates curl unzip \
     && curl -fsSLO "$base/terraform_${TERRAFORM_VERSION}_SHA256SUMS" \
     && grep " $asset$" "terraform_${TERRAFORM_VERSION}_SHA256SUMS" | sha256sum -c - \
     && unzip -q "$asset" -d /out
-
 FROM alpine:3.20
-
-# Runtime only: Terraform, TLS roots, tiny init, privilege drop.
 RUN apk add --no-cache ca-certificates tini su-exec \
     && addgroup -g 1000 terraform \
     && adduser -D -u 1000 -G terraform terraform
-
-WORKDIR /workspace
 COPY --from=terraform-download /out/terraform /usr/local/bin/terraform
-COPY terraform/ /workspace/
+COPY terraform/ /opt/terraform-src/
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod 755 /usr/local/bin/entrypoint.sh \
-    && mkdir -p /workspace/.terraform.d/plugin-cache \
-    && chown -R terraform:terraform /workspace
-
+RUN chmod 755 /usr/local/bin/entrypoint.sh
+WORKDIR /workspace
 ENV TF_IN_AUTOMATION=1 \
     TF_PLUGIN_CACHE_DIR=/workspace/.terraform.d/plugin-cache \
     TF_LOG_PATH=/workspace/terraform.log
-
 ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/entrypoint.sh"]
