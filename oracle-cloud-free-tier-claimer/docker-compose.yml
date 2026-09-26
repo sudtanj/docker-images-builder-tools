@@ -12,7 +12,7 @@ services:
       OCI_REGION: ap-singapore-1
       OCI_AVAILABILITY_DOMAIN: AD-1
       OCI_SSH_PUBLIC_KEY: ""
-      RUN_INTERVAL: 1800
+      RUN_INTERVAL: 300
       RUN_ONCE: 0
     volumes:
       - oci-terraform-state:/workspace

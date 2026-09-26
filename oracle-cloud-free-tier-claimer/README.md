@@ -40,7 +40,7 @@ docker compose logs -f
 
 - `entrypoint.sh` writes `terraform.tfvars` (and a private key file) from
   the environment variables at start, runs `terraform init`, then loops `terraform apply -auto-approve`.
-- `RUN_INTERVAL` (default `1800` seconds / 30m) controls the loop interval.
+- `RUN_INTERVAL` (default `300` seconds / 5min) controls the loop interval.
 - `RUN_ONCE=1` exits after a single apply (useful for CI).
 - Free-tier capacity is often exhausted, so a failed apply retries on the next interval automatically.
 
