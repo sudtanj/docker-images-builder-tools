@@ -1,0 +1,10 @@
+services:
+  oracle-cloud-free-tier-claimer:
+    image: sudtanj/oracle-cloud-free-tier-claimer:latest
+    env_file: .env
+    volumes:
+      - oci-terraform-state:/workspace
+    restart: unless-stopped
+
+volumes:
+  oci-terraform-state:
