@@ -1,13 +1,8 @@
 #!/bin/sh
 set -eu
 WORKDIR="${WORKDIR:-/workspace}"
-TERRAFORM_SRC="${TERRAFORM_SRC:-/opt/terraform-src}"
 mkdir -p "$WORKDIR/.terraform.d/plugin-cache"
 if [ "$(id -u)" = "0" ]; then chown -R terraform:terraform "$WORKDIR" 2>/dev/null || true; fi
-for tf in "$TERRAFORM_SRC"/*.tf "$TERRAFORM_SRC"/*.hcl; do
-  [ -f "$tf" ] || continue
-  [ -f "$WORKDIR/${tf##*/}" ] || cp -n "$tf" "$WORKDIR/${tf##*/}" 2>/dev/null || true
-done
 : "${OCI_TENANCY_OCID:?OCI_TENANCY_OCID is required}"
 : "${OCI_USER_OCID:?OCI_USER_OCID is required}"
 : "${OCI_FINGERPRINT:?OCI_FINGERPRINT is required}"
