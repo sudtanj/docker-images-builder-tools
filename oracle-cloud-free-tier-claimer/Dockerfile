@@ -20,7 +20,7 @@ RUN apk add --no-cache ca-certificates tini su-exec \
     && addgroup -g 1000 terraform \
     && adduser -D -u 1000 -G terraform terraform
 COPY --from=terraform-download /out/terraform /usr/local/bin/terraform
-COPY oracle-cloud-free-tier-claimer/terraform/ /workspace
+COPY ./oracle-cloud-free-tier-claimer/terraform/ /workspace
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod 755 /usr/local/bin/entrypoint.sh
 WORKDIR /workspace
