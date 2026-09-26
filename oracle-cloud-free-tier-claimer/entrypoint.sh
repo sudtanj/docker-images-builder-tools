@@ -13,8 +13,8 @@ fi
 : "${OCI_TENANCY_OCID:?OCI_TENANCY_OCID is required}"
 : "${OCI_USER_OCID:?OCI_USER_OCID is required}"
 : "${OCI_FINGERPRINT:?OCI_FINGERPRINT is required}"
-: "${OCI_PRIVATE_KEY:?OCI_PRIVATE_KEY is required}"
 : "${OCI_COMPARTMENT_OCID:?OCI_COMPARTMENT_OCID is required}"
+[ -z "${OCI_PRIVATE_KEY:-}" ] && [ -z "${OCI_PRIVATE_KEY_BASE64:-}" ] && { echo "OCI_PRIVATE_KEY or OCI_PRIVATE_KEY_BASE64 is required" >&2; exit 1; }
 
 KEY_FILE="$WORKDIR/.oci_api_private_key.pem"
 mkdir -p "$(dirname "$KEY_FILE")"
