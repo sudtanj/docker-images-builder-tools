@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 ARG TERRAFORM_VERSION=1.6.0
-FROM alpine:3.20 AS terraform-download
+FROM alpine:3.24 AS terraform-download
 ARG TERRAFORM_VERSION
 ARG TARGETARCH
 RUN apk add --no-cache ca-certificates curl unzip \
@@ -15,7 +15,7 @@ RUN apk add --no-cache ca-certificates curl unzip \
     && curl -fsSLO "$base/terraform_${TERRAFORM_VERSION}_SHA256SUMS" \
     && grep " $asset$" "terraform_${TERRAFORM_VERSION}_SHA256SUMS" | sha256sum -c - \
     && unzip -q "$asset" -d /out
-FROM alpine:3.20
+FROM alpine:3.24
 RUN apk add --no-cache ca-certificates tini su-exec \
     && addgroup -g 1000 terraform \
     && adduser -D -u 1000 -G terraform terraform
