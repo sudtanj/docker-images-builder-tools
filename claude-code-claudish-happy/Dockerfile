@@ -9,7 +9,7 @@
 #   - Happy CLI         (https://github.com/slopus/happy)
 # plus common compilers/interpreters so Claude Code can actually build and
 # run the code it writes (C/C++, Python, Go, Node, Deno), not just edit it.
-FROM ubuntu:24.04
+FROM ubuntu:26.04
 
 ARG USERNAME=agent
 ARG USER_UID=1000
