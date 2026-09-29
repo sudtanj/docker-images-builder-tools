@@ -66,6 +66,13 @@ gh workflow run docker-publish.yml -f folder=claude-code-claudish-happy
    per-folder version tags: Settings -> Actions -> General -> Workflow
    permissions -> "Read and write permissions".
 
+## Automatic updates
+
+Dependabot checks each Dockerfile weekly and auto-merges newer base-image tags
+after the PR checks pass. The publish workflow also rebuilds every image every
+Monday at 04:17 UTC with `--no-cache`, refreshing rolling tags even when the
+Dockerfile text is unchanged. Enable repository auto-merge and protect `main`.
+
 ## Images in this repo
 
 | Folder | Docker Hub | What it is |

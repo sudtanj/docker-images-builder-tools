@@ -36,6 +36,8 @@ on:
   push:
     branches:
       - main
+  schedule:
+    - cron: '17 4 * * 1'
   workflow_dispatch:
     inputs:
       folder:
@@ -43,6 +45,11 @@ on:
           Folder to build (must contain a Dockerfile). Leave empty to
           build every folder that has one.
         required: false
+      no_cache:
+        description: 'Build without Docker layer cache'
+        required: false
+        type: boolean
+        default: false
 
 env:
   DOCKERHUB_NAMESPACE: sudtanj
@@ -82,7 +89,7 @@ jobs:
                   exit 1
               fi
               folders="$INPUT_FOLDER"
-          elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ] || [ "$EVENT_NAME" = "schedule" ]; then
               folders="$(all_folders_with_dockerfile)"
           elif [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ] || [ -z "$BEFORE_SHA" ]; then
               # New branch / first push this workflow has seen - nothing to
@@ -158,8 +165,10 @@ jobs:
           context: ./${{ matrix.folder }}
           platforms: linux/amd64,linux/arm64
           push: true
+          pull: true
           tags: |
             ${{ env.DOCKERHUB_NAMESPACE }}/${{ matrix.folder }}:latest
             ${{ env.DOCKERHUB_NAMESPACE }}/${{ matrix.folder }}:${{ steps.tag.outputs.new_version }}
           cache-from: type=gha,scope=${{ matrix.folder }}
           cache-to: type=gha,mode=max,scope=${{ matrix.folder }}
+          no-cache: ${{ inputs.no_cache == true || github.event_name == 'schedule' }}

@@ -1,0 +1,38 @@
+name: Validate Dockerfile updates
+
+on:
+  pull_request:
+    paths:
+      - '*/Dockerfile'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build changed images
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          folders=$(
+            git diff --name-only "$BASE_SHA" "$HEAD_SHA" |
+              awk -F/ 'NF == 2 && $2 == "Dockerfile" { print $1 }' |
+              sort -u
+          )
+          while IFS= read -r folder; do
+            if [ -n "$folder" ]; then
+              docker buildx build --platform linux/amd64 "./$folder"
+            fi
+          done <<< "$folders"

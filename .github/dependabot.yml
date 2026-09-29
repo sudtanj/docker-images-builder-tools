@@ -1,0 +1,17 @@
+version: 2
+updates:
+  - package-ecosystem: docker
+    directory: /claude-code-claudish-happy
+    schedule: { interval: weekly }
+  - package-ecosystem: docker
+    directory: /mini-router
+    schedule: { interval: weekly }
+  - package-ecosystem: docker
+    directory: /oci-freetier-creator
+    schedule: { interval: weekly }
+  - package-ecosystem: docker
+    directory: /oracle-cloud-free-tier-claimer
+    schedule: { interval: weekly }
+  - package-ecosystem: docker
+    directory: /paseo-codex
+    schedule: { interval: weekly }
