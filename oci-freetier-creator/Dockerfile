@@ -12,7 +12,7 @@
 # cryptography dependency has to compile its Rust extension from source -
 # needs gcc/musl-dev/libffi-dev/openssl-dev/cargo. All isolated to this
 # stage so none of that toolchain ends up in the final image.
-FROM python:3.12-alpine AS builder
+FROM python:3.14-alpine AS builder
 
 RUN apk add --no-cache git build-base libffi-dev openssl-dev cargo rust
 
@@ -28,7 +28,7 @@ RUN python -m venv /venv \
     && /venv/bin/pip install --no-cache-dir -r requirements.txt
 
 # --- final stage ---------------------------------------------------------
-FROM python:3.12-alpine
+FROM python:3.14-alpine
 
 # libffi/openssl: runtime shared libs cryptography's compiled extension
 # needs (not the -dev/build-base/rust used only to build it above).
