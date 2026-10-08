@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# Paseo (https://github.com/getpaseo/paseo) + Codex CLI.
+# Paseo (https://github.com/getpaseo/paseo) + Codex CLI + Claude Code CLI.
 #
 # Paseo's own published image ships NO agent CLIs by default - its docs
 # (docs/docker.md, "Installing Agents") document exactly this pattern:
@@ -9,17 +9,24 @@
 # is the thing that drops privileges to the non-root `paseo` user, for
 # both the daemon itself and any agent it launches).
 #
-# On top of that, this adds this repo's own Codex BYOK support: point
-# Codex at any OpenAI-Responses-API-compatible endpoint via
-# CODEX_BASE_URL / CODEX_API_KEY / CODEX_MODEL, entirely through env vars
-# (see entrypoint.sh + configure-codex-provider.sh, and .env.example).
+# On top of that, this adds this repo's own BYOK support for both agents,
+# entirely through env vars (see entrypoint.sh + configure-codex-provider.sh,
+# and the `environment:` block in docker-compose.yml / docker-compose.hub.yml
+# - all runtime config lives right there in the compose YAML, no .env files):
+#   - Codex: point it at any OpenAI-Responses-API-compatible endpoint via
+#     CODEX_BASE_URL / CODEX_API_KEY / CODEX_MODEL (generates
+#     ~/.codex/config.toml at startup).
+#   - Claude Code: ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN /
+#     ANTHROPIC_BASE_URL / ANTHROPIC_MODEL are read natively by Claude Code
+#     from the environment on every launch - no config file to generate,
+#     Paseo's daemon just inherits and passes them through.
 FROM ghcr.io/getpaseo/paseo:latest
 
 USER root
 
-RUN npm install -g @openai/codex
+RUN npm install -g @anthropic-ai/claude-code && npm install -g @openai/codex
 
-# GitHub CLI (gh) - so Codex sessions (running as `paseo`, working in
+# GitHub CLI (gh) - so Codex/Claude Code sessions (running as `paseo`, working in
 # /workspace) can clone private repos via `gh repo clone` / `gh auth login`
 # using GH_TOKEN, rather than needing SSH keys mounted into the container.
 # Base image is Debian bookworm-slim (node:22-bookworm-slim) - install from

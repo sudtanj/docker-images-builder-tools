@@ -8,13 +8,20 @@
 [**Paseo**](https://github.com/getpaseo/paseo) - a daemon + bundled web UI
 for running and orchestrating coding agent CLIs remotely - layered with
 [**Codex CLI**](https://github.com/openai/codex), OpenAI's coding agent,
-with BYOK support for any OpenAI-Responses-API-compatible endpoint.
+and [**Claude Code CLI**](https://docs.claude.com/en/docs/claude-code),
+Anthropic's coding agent, with BYOK support for both: any
+OpenAI-Responses-API-compatible endpoint for Codex, any
+Anthropic-API-compatible endpoint for Claude Code.
 
 Paseo's own published image ships no agent CLIs by default - its docs
 document a child-image pattern (`FROM` the base image, `USER root`,
 `npm install -g` whichever CLIs you want) that this image follows exactly,
-adding only this repo's own Codex BYOK wiring on top, entirely through env
-vars.
+adding only this repo's own BYOK wiring for both agents on top, entirely
+through env vars.
+
+**All configuration lives directly in the compose YAML** - the
+`environment:` block of `docker-compose.yml` / `docker-compose.hub.yml`.
+No `.env` file and no `env_file:` are used; edit the YAML, restart, done.
 
 ## Quick start with docker compose
 
@@ -26,12 +33,13 @@ source or just run the already-published image:
 - **`docker-compose.hub.yml`** - pulls
   [`sudtanj/paseo-codex`](https://hub.docker.com/r/sudtanj/paseo-codex)
   from Docker Hub instead of building. Use this if you just want to run it -
-  only this file and a `.env` are needed, no clone/build required.
+  only this file is needed (all config lives in its `environment:` block),
+  no clone/build required.
 
 ```bash
-cp .env.example .env
-# edit .env - at minimum set PASEO_PASSWORD and OPENAI_API_KEY (or the
-# CODEX_BASE_URL BYOK vars)
+# Edit the `environment:` block in the compose file first - at minimum set
+# PASEO_PASSWORD and one of ANTHROPIC_API_KEY (Claude Code),
+# OPENAI_API_KEY or CODEX_BASE_URL (Codex BYOK). All config lives there.
 
 # Build locally:
 docker compose up -d
@@ -41,9 +49,9 @@ docker compose -f docker-compose.hub.yml up -d
 ```
 
 Paseo's web UI + API is then reachable at `http://localhost:6767`. The
-current directory is mounted at `/workspace` for Codex sessions to work in;
-`~/home/paseo` (Paseo's own state, plus `~/.codex`) persists in the
-`paseo-home` named volume across restarts.
+current directory is mounted at `/workspace` for Claude Code/Codex sessions
+to work in; `~/home/paseo` (Paseo's own state, plus `~/.claude` and
+`~/.codex`) persists in the `paseo-home` named volume across restarts.
 
 Both compose files use `network_mode: host` instead of a published port -
 the container shares the host's network stack directly rather than going
@@ -57,29 +65,64 @@ just uses whatever the host itself can already reach. The tradeoff is the
 usual one for host networking: no port remapping/isolation, and
 `PASEO_LISTEN`'s port is the actual host port.
 
-You can also run Codex directly inside the running container, per Paseo's
-own docs:
+You can also run either agent directly inside the running container, per
+Paseo's own docs:
 
 ```bash
+docker compose exec --user paseo paseo-codex claude
 docker compose exec --user paseo paseo-codex codex
 ```
 
-## Configuration (all via env vars)
+## Configuration (all via the compose `environment:` block)
 
-See `.env.example` for the full, commented list. Everything is set via
-environment variables so you can customize it entirely from your own
-`docker-compose.yml` / `.env` - no image rebuild needed for config changes.
+Everything is set via environment variables declared right in
+`docker-compose.yml` / `docker-compose.hub.yml` - uncomment and fill in
+what you need, then `docker compose up -d` to apply. No `.env` file, no
+`env_file:`, no image rebuild needed for config changes.
 
 | Variable | Purpose |
 |---|---|
 | `PASEO_PASSWORD` | Auth for Paseo's daemon/web UI. Strongly recommended for anything network-reachable. |
 | `PASEO_LISTEN` | Listen address (default `0.0.0.0:6767`). |
 | `PASEO_HOSTNAMES` | Comma-separated allow-listed hostnames, for use behind a reverse proxy. |
+| `ANTHROPIC_API_KEY` | Direct Anthropic API key for Claude Code - **API-key billing only; leave unset if you use a Pro/Max subscription**. |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Subscription auth for headless/remote use - from `claude setup-token` on your own machine; charges your plan, not API usage. Alternative to `claude /login`. |
+| `ANTHROPIC_BASE_URL` | Claude Code BYOK: point Claude Code at your own Anthropic-API-compatible endpoint instead of `api.anthropic.com`. |
+| `ANTHROPIC_AUTH_TOKEN` | Optional bearer token for the BYOK endpoint (sent as `Authorization: Bearer` instead of `x-api-key`). |
+| `ANTHROPIC_MODEL` | Optional default model for Claude Code (unset = its built-in default). |
 | `OPENAI_API_KEY` | Direct OpenAI API key - passed straight through to Codex sessions Paseo launches. |
 | `CODEX_BASE_URL` | Codex BYOK: point Codex at your own OpenAI-Responses-API-compatible endpoint instead of `api.openai.com`. |
 | `CODEX_API_KEY` | Optional key for the BYOK endpoint (a local/trusted gateway needs none). |
 | `CODEX_MODEL` | Optional default model for Codex. |
 | `GH_TOKEN` | GitHub token for cloning/pulling private repos into `/workspace` - wired up for both `gh` and plain `git` automatically. |
+
+### How Claude Code gets its config
+
+Claude Code reads its settings natively from the environment on every
+launch - `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`,
+`ANTHROPIC_MODEL` - so unlike Codex there is no config file for the
+entrypoint to generate at startup. The entrypoint just hands this
+environment to Paseo's daemon, which passes those vars straight to the
+Claude Code sessions it launches.
+
+**Subscription (Pro/Max) works out of the box** - nothing in this image
+forces API-key auth (no key, no placeholder; `ANTHROPIC_API_KEY` stays
+unset by default, and it would take precedence if you ever set it). Two
+ways to authenticate with your plan:
+
+1. **Interactive login (simplest)** - run `claude /login` once inside the
+   container (`docker compose exec --user paseo paseo-codex claude`, then
+   `/login`); the OAuth credentials are stored in `~/.claude`, which
+   persists in the `paseo-home` volume across restarts, and the startup
+   chown keeps them writable by the `paseo` user.
+2. **Headless token** - run `claude setup-token` on your own machine (it
+   walks you through the OAuth flow and prints a token for your
+   subscription) and put it in the compose `environment:` block as
+   `CLAUDE_CODE_OAUTH_TOKEN`. Nothing is written to disk in the container.
+
+Either way Claude Code bills/limits against your subscription, not
+per-token API usage. Only set `ANTHROPIC_API_KEY` if you actually want
+API-key billing.
 
 ### Codex BYOK caveat
 
@@ -122,10 +165,13 @@ manual `gh auth login` needed.
 ## How it's built
 
 `Dockerfile` starts `FROM ghcr.io/getpaseo/paseo:latest`, installs
-`@openai/codex` and GitHub CLI (`gh`, from GitHub's own apt repo - the base
-image is Debian bookworm-slim) as root, and wraps Paseo's own entrypoint
-with a thin `entrypoint.sh` that runs `configure-codex-provider.sh`
-(generates `~/.codex/config.toml` from the env vars above) and, if
+`@anthropic-ai/claude-code` and `@openai/codex`, plus GitHub CLI (`gh`,
+from GitHub's own apt repo - the base image is Debian bookworm-slim), as
+root, and wraps Paseo's own entrypoint with a thin `entrypoint.sh` that
+runs `configure-codex-provider.sh` (generates `~/.codex/config.toml` from
+the Codex env vars above - Claude Code needs no generated config: its
+`ANTHROPIC_*` vars are read straight from the compose `environment:`
+block) and, if
 `GH_TOKEN`/`GITHUB_TOKEN` is set, `gh auth setup-git` (wires the token into
 git's credential helper) before handing off, unchanged, to Paseo's original
 entrypoint - same `tini` PID-1 wrapping, same root -> `paseo`-user
