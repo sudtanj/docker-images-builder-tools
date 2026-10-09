@@ -1,57 +1,46 @@
 # syntax=docker/dockerfile:1
 
-# Paseo (https://github.com/getpaseo/paseo) + Codex CLI + Claude Code CLI.
-#
-# Paseo's own published image ships NO agent CLIs by default - its docs
-# (docs/docker.md, "Installing Agents") document exactly this pattern:
-# FROM the base image, USER root, npm install -g whichever agent CLIs you
-# want, and leave the child image's user as root (Paseo's own entrypoint
-# is the thing that drops privileges to the non-root `paseo` user, for
-# both the daemon itself and any agent it launches).
-#
-# On top of that, this adds this repo's own BYOK support for both agents,
-# entirely through env vars (see entrypoint.sh + configure-codex-provider.sh,
-# and the `environment:` block in docker-compose.yml / docker-compose.hub.yml
-# - all runtime config lives right there in the compose YAML, no .env files):
-#   - Codex: point it at any OpenAI-Responses-API-compatible endpoint via
-#     CODEX_BASE_URL / CODEX_API_KEY / CODEX_MODEL (generates
-#     ~/.codex/config.toml at startup).
-#   - Claude Code: ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN /
-#     ANTHROPIC_BASE_URL / ANTHROPIC_MODEL are read natively by Claude Code
-#     from the environment on every launch - no config file to generate,
-#     Paseo's daemon just inherits and passes them through.
-FROM ghcr.io/getpaseo/paseo:latest
+ARG PASEO_VERSION=latest
 
+# ---------- Stage 1: build everything that needs tooling ----------
+FROM ghcr.io/getpaseo/paseo:${PASEO_VERSION} AS builder
 USER root
 
-RUN npm install -g @anthropic-ai/claude-code && npm install -g @openai/codex
+ARG CLAUDE_CODE_VERSION=latest
+ARG CODEX_VERSION=latest
+ARG GH_VERSION=2.63.2
+ARG TARGETARCH
 
-# GitHub CLI (gh) - so Codex/Claude Code sessions (running as `paseo`, working in
-# /workspace) can clone private repos via `gh repo clone` / `gh auth login`
-# using GH_TOKEN, rather than needing SSH keys mounted into the container.
-# Base image is Debian bookworm-slim (node:22-bookworm-slim) - install from
-# GitHub's own apt repo per https://github.com/cli/cli/blob/trunk/docs/install_linux.md.
-RUN (type -p wget >/dev/null || (apt-get update && apt-get install -y wget)) \
-    && mkdir -p -m 755 /etc/apt/keyrings \
-    && wget -nv -O /etc/apt/keyrings/githubcli-archive-keyring.gpg https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-    && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
-    && apt-get update \
-    && apt-get install -y gh \
-    && rm -rf /var/lib/apt/lists/*
+# Agent CLIs into an isolated prefix so we can copy just this directory
+RUN --mount=type=cache,target=/root/.npm \
+    npm install -g --no-audit --no-fund --loglevel=error \
+      --prefix /opt/agents \
+      @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} \
+      @openai/codex@${CODEX_VERSION} \
+ && find /opt/agents -type f \( -name "*.map" -o -name "*.md" -o -name "*.ts" ! -name "*.d.ts" \) -delete \
+ && find /opt/agents -type d \( -name test -o -name tests -o -name docs \) -prune -exec rm -rf {} +
 
-COPY configure-codex-provider.sh /usr/local/bin/configure-codex-provider
-COPY entrypoint.sh /usr/local/bin/paseo-codex-entrypoint
-RUN chmod +x /usr/local/bin/configure-codex-provider /usr/local/bin/paseo-codex-entrypoint
+# gh as a single static binary (no apt repo, no apt layers)
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl \
+ && curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${TARGETARCH:-amd64}.tar.gz" \
+    | tar -xz -C /tmp \
+ && install -m 755 /tmp/gh_${GH_VERSION}_linux_${TARGETARCH:-amd64}/bin/gh /usr/local/bin/gh-bin
 
-# Stays root here on purpose (see comment above) - Paseo's own entrypoint,
-# which this wraps and hands off to, handles dropping to the `paseo` user
-# itself via gosu.
+# ---------- Stage 2: runtime ----------
+FROM ghcr.io/getpaseo/paseo:${PASEO_VERSION}
+USER root
 
+# Same base image => same Node ABI, so native deps copy over safely.
+# Symlinks in /opt/agents/bin are relative, so they survive the move.
+COPY --from=builder /opt/agents/ /usr/local/
+COPY --from=builder /usr/local/bin/gh-bin /usr/local/bin/gh
+
+COPY --chmod=755 configure-codex-provider.sh /usr/local/bin/configure-codex-provider
+COPY --chmod=755 entrypoint.sh /usr/local/bin/paseo-codex-entrypoint
+
+ENV NODE_OPTIONS=--max-old-space-size=512
+
+# Stays root: Paseo's own entrypoint drops to `paseo` via gosu.
 ENTRYPOINT ["/usr/local/bin/paseo-codex-entrypoint"]
-# Explicit empty CMD: guarantees a plain `docker run <this image>` (no
-# command) passes zero args to the entrypoint, which is what makes Paseo's
-# own entrypoint take its "start the daemon" branch rather than its
-# "exec the passed command" branch - regardless of whatever CMD the base
-# image happened to inherit further up its own build chain.
 CMD []
