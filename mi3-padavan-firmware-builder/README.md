@@ -1,6 +1,6 @@
 # Mi 3 Padavan firmware builder (auto-updating)
 
-Part of the docker-images-builder-tools monorepo. Based on
+Part of the builder-tools monorepo. Based on
 [sudtanj/mi3-builder-workflow](https://github.com/sudtanj/mi3-builder-workflow)
 (itself derived from shvchk/padavan-builder-workflow), extended to track
 upstream automatically.
