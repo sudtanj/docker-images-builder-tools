@@ -36,6 +36,8 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - 'mi3-padavan-firmware-builder/**'
   schedule:
     - cron: '17 4 * * 1'
   workflow_dispatch:
