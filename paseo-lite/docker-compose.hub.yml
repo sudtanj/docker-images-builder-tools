@@ -54,7 +54,9 @@ services:
       # who can reach it. (Relay clients are authenticated by the E2EE
       # pairing key instead.)
       # PASEO_PASSWORD: change-me
-      # PASEO_LISTEN: 0.0.0.0:6767
+      # 6768, not upstream Paseo's 6767, so it never collides with a
+      # paseo-codex / Paseo daemon already bound to 6767 on this host.
+      PASEO_LISTEN: 0.0.0.0:6768
       # PASEO_HOSTNAMES: paseo.example.com,.lan
 
       # --- paseo-lite process sharing (optional, defaults shown) ------------

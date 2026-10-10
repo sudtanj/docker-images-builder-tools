@@ -89,7 +89,7 @@ COPY --chmod=755 entrypoint.sh /usr/local/bin/paseo-lite-entrypoint
 # Daemon defaults for a network-reachable container on a free-tier VM.
 # Claude Code: use the system ripgrep (musl) and silence background work.
 ENV HOME=/home/paseo \
-    PASEO_LISTEN=0.0.0.0:6767 \
+    PASEO_LISTEN=0.0.0.0:6768 \
     PASEO_RELAY_ENABLED=true \
     PASEO_LOG_CONSOLE_LEVEL=warn \
     USE_BUILTIN_RIPGREP=0 \
@@ -102,7 +102,7 @@ ENV HOME=/home/paseo \
     DISABLE_COST_WARNINGS=1
 
 WORKDIR /workspace
-EXPOSE 6767
+EXPOSE 6768
 
 # Stays root so the entrypoint can heal volume ownership, then drops to paseo.
 ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/paseo-lite-entrypoint"]
