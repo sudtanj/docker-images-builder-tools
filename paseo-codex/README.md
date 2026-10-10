@@ -177,3 +177,21 @@ git's credential helper) before handing off, unchanged, to Paseo's original
 entrypoint - same `tini` PID-1 wrapping, same root -> `paseo`-user
 privilege drop via `gosu`, same daemon-start vs. exec-passthrough
 branching.
+
+## GCP free tier (e2-micro) tuning
+
+Defaults here target a 1 GB / shared-0.25-vCPU VM:
+
+- **Container caps** (compose): `mem_limit: 800m`, `memswap_limit: 2g`, `cpus: 1.0`, capped Docker json logs.
+- **Paseo config** (seeded on first start): MCP disabled (relay left on), browser tools off, unused providers (opencode/copilot/pi) off, Haiku for metadata generation, log file level `info` instead of `trace`, 5 MB x 2 rotation.
+- **Node**: `--max-old-space-size=512`; lower to 384 if you see OOM kills.
+- **Host**: run `sudo scripts/gcp-free-tier-setup.sh` once for a 2 GB swapfile, lower swappiness and capped journald.
+- **Usage habits**: run one agent session at a time (each Claude/Codex CLI process can use 200-400 MB), disable the provider you don't use in `~/.paseo/config.json`, and keep voice/dictation on a remote provider (`openai`) rather than local models.
+- Existing volumes keep their old `config.json`; edit it or delete it to re-seed.
+
+### Trimming Claude Code / Codex
+
+- Only need one agent? Build without the other: `--build-arg INSTALL_CODEX=` (or `INSTALL_CLAUDE=`). Also set that provider to `"enabled": false` in `~/.paseo/config.json`.
+- The image sets Claude Code's `DISABLE_NON_ESSENTIAL_MODEL_CALLS`, `DISABLE_ERROR_REPORTING`, `DISABLE_BUG_COMMAND` and `DISABLE_COST_WARNINGS`, on top of autoupdate/telemetry off.
+- Claude Code is a Node process (the 512 MB heap cap applies to each one); Codex is a native binary and is usually lighter. Prefer Codex or a smaller Claude model (`ANTHROPIC_MODEL=claude-haiku-4-5`) for routine tasks.
+- Disk: Claude keeps transcripts 30 days by default; set `"cleanupPeriodDays": 7` in `~/.claude/settings.json`. For Codex, `[history] persistence = "none"` in `~/.codex/config.toml` stops saving history.

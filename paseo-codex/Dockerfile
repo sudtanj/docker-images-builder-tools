@@ -10,13 +10,17 @@ ARG CLAUDE_CODE_VERSION=latest
 ARG CODEX_VERSION=latest
 ARG GH_VERSION=2.63.2
 ARG TARGETARCH
+# Set to "" to leave an agent CLI out of the image (saves disk and build time).
+ARG INSTALL_CLAUDE=1
+ARG INSTALL_CODEX=1
 
 # Agent CLIs into an isolated prefix so we can copy just this directory
 RUN --mount=type=cache,target=/root/.npm \
-    npm install -g --no-audit --no-fund --loglevel=error \
-      --prefix /opt/agents \
-      @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} \
-      @openai/codex@${CODEX_VERSION} \
+    mkdir -p /opt/agents \
+ && pkgs="" \
+ && { [ -z "${INSTALL_CLAUDE}" ] || pkgs="$pkgs @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"; } \
+ && { [ -z "${INSTALL_CODEX}" ] || pkgs="$pkgs @openai/codex@${CODEX_VERSION}"; } \
+ && { [ -z "$pkgs" ] || npm install -g --no-audit --no-fund --loglevel=error --prefix /opt/agents $pkgs; } \
  && find /opt/agents -type f \( -name "*.map" -o -name "*.md" \) -delete
 
 # gh as a single static binary (no apt repo, no apt layers)
@@ -42,8 +46,13 @@ COPY --from=builder /usr/local/bin/gh-bin /usr/local/bin/gh
 COPY --chmod=644 <<'EOF' /usr/local/share/paseo/config.default.json
 {
   "daemon": {
-    "mcp": { "injectIntoAgents": false },
+    "mcp": { "enabled": false, "injectIntoAgents": false },
+    "relay": { "enabled": true },
     "browserTools": { "enabled": false }
+  },
+  "log": {
+    "console": { "level": "warn" },
+    "file": { "level": "info", "rotate": { "maxSize": "5m", "maxFiles": 2 } }
   },
   "agents": {
     "catalogRefreshTimeoutMs": 30000,
@@ -69,7 +78,11 @@ COPY --chmod=755 entrypoint.sh /usr/local/bin/paseo-codex-entrypoint
 ENV NODE_OPTIONS=--max-old-space-size=512 \
     DISABLE_AUTOUPDATER=1 \
     DISABLE_TELEMETRY=1 \
-    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
+    DISABLE_NON_ESSENTIAL_MODEL_CALLS=1 \
+    DISABLE_ERROR_REPORTING=1 \
+    DISABLE_BUG_COMMAND=1 \
+    DISABLE_COST_WARNINGS=1
 
 # Stays root: Paseo's own entrypoint drops to `paseo` via gosu.
 ENTRYPOINT ["/usr/local/bin/paseo-codex-entrypoint"]
