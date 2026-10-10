@@ -1,24 +1,12 @@
 # syntax=docker/dockerfile:1
 
 # paseo-lite: Rust Paseo daemon + native Claude Code CLI + native Codex CLI
-# on Alpine. No Node.js anywhere in the final image.
+# on Alpine. No Node.js anywhere in the final image. The daemon is a prebuilt
+# static binary (no Rust toolchain in the build), so the image builds fast.
 
 ARG ALPINE_VERSION=3.20
 
-# ---------- Stage 1: build the paseo-lite daemon (static musl binary) ----------
-FROM rust:1-alpine${ALPINE_VERSION} AS daemon
-RUN apk add --no-cache musl-dev
-# BuildKit git source: the cache is invalidated whenever the ref moves.
-ARG PASEO_LITE_GIT=https://github.com/sudtanj/paseo-code-rust.git
-ARG PASEO_LITE_REF=main
-ADD ${PASEO_LITE_GIT}#${PASEO_LITE_REF} /src
-WORKDIR /src
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/src/target \
-    cargo build --release \
- && install -Dm755 target/release/paseo-lite /out/paseo-lite
-
-# ---------- Stage 2: fetch native agent CLIs + gh ----------
+# ---------- Stage 1: fetch the prebuilt daemon + native agent CLIs + gh ----------
 FROM alpine:${ALPINE_VERSION} AS agents
 ARG TARGETARCH
 # "stable", "latest" or an exact version, passed to Claude's official installer.
@@ -26,12 +14,17 @@ ARG CLAUDE_CODE_VERSION=latest
 # "latest" or an exact Codex release (e.g. 0.46.0 -> tag rust-v0.46.0).
 ARG CODEX_VERSION=latest
 ARG GH_VERSION=2.63.2
+# paseo-lite release asset (built by sudtanj/paseo-code-rust CI, static musl).
+# "latest" is a rolling release of main; pin with a release tag if one exists.
+ARG PASEO_LITE_RELEASE=latest
 # Set to "" to leave an agent CLI out of the image (saves disk + build time).
 ARG INSTALL_CLAUDE=1
 ARG INSTALL_CODEX=1
 # The native Claude binary needs libgcc/libstdc++ on musl to run its installer.
 RUN apk add --no-cache bash curl ca-certificates libgcc libstdc++ ripgrep
 RUN mkdir -p /out \
+ && curl -fsSL -o /out/paseo-lite "https://github.com/sudtanj/paseo-code-rust/releases/download/${PASEO_LITE_RELEASE}/paseo-lite-x86_64-linux-musl" \
+ && chmod 755 /out/paseo-lite \
  && case "${TARGETARCH:-amd64}" in \
       amd64) arch=x86_64 ;; \
       arm64) arch=aarch64 ;; \
@@ -51,7 +44,7 @@ RUN mkdir -p /out \
     | tar -xz -C /tmp \
  && install -m755 "/tmp/gh_${GH_VERSION}_linux_${TARGETARCH:-amd64}/bin/gh" /out/gh
 
-# ---------- Stage 3: runtime ----------
+# ---------- Stage 2: runtime ----------
 FROM alpine:${ALPINE_VERSION}
 
 # What agents need to do real work: a shell, git (+ssh remotes), ripgrep for
@@ -61,8 +54,9 @@ RUN apk add --no-cache bash git openssh-client ca-certificates libgcc libstdc++ 
  && adduser -D -u 1000 -h /home/paseo -s /bin/bash paseo \
  && mkdir -p /workspace && chown paseo:paseo /workspace
 
-COPY --from=daemon /out/paseo-lite /usr/local/bin/paseo-lite
+COPY --from=agents /out/paseo-lite /usr/local/bin/paseo-lite
 COPY --from=agents /out/ /usr/local/lib/agents/
+RUN rm -f /usr/local/lib/agents/paseo-lite
 
 # Low-priority launcher: agents run at the lowest CPU priority (and idle I/O
 # class when available), so the daemon and its relay pings always win when
