@@ -30,7 +30,7 @@ prompt, and adding projects costs nothing until an agent runs a turn.
 ## Quick start with docker compose
 
 - **`docker-compose.yml`** - builds the image locally from the `Dockerfile`.
-- **`docker-compose.hub.yml`** - pulls
+- **`docker-compose.hub.yml`** - pulls (published for `linux/amd64` only, see `.platforms`)
   [`sudtanj/paseo-lite`](https://hub.docker.com/r/sudtanj/paseo-lite) instead.
 
 **All configuration lives directly in the compose YAML** (`environment:`

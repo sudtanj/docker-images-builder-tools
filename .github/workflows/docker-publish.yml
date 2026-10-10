@@ -32,6 +32,10 @@ name: Build and push Docker images
 # small/medium images; a folder with an unusually heavy build (this
 # repo's claude-code-claudish-happy/ image, for one) will just take
 # longer to build on arm64, not fail.
+#
+# Per-folder override: put a `.platforms` file in the folder (for example
+# `linux/amd64`) to build a different platform list; QEMU is skipped when
+# no emulated platform is requested. paseo-lite/ uses this (amd64 only).
 on:
   push:
     branches:
@@ -149,10 +153,28 @@ jobs:
           echo "new_version=${new_version}" >> "$GITHUB_OUTPUT"
           echo "Tagged ${FOLDER} as ${new_tag}"
 
+      - name: Resolve target platforms
+        id: platforms
+        env:
+          FOLDER: ${{ matrix.folder }}
+        run: |
+          set -euo pipefail
+          # Optional per-folder override: <folder>/.platforms (comma or
+          # newline separated, # comments allowed). Default: amd64 + arm64.
+          platforms="linux/amd64,linux/arm64"
+          if [ -f "${FOLDER}/.platforms" ]; then
+              custom=$(sed 's/#.*//' "${FOLDER}/.platforms" | tr ',' '\n' | sed 's/[[:space:]]//g; /^$/d' | paste -sd, -)
+              if [ -n "$custom" ]; then platforms="$custom"; fi
+          fi
+          echo "platforms=${platforms}" >> "$GITHUB_OUTPUT"
+          case "$platforms" in *arm64*|*arm/*) echo "needs_qemu=true" >> "$GITHUB_OUTPUT" ;; *) echo "needs_qemu=false" >> "$GITHUB_OUTPUT" ;; esac
+          echo "Platforms for ${FOLDER}: ${platforms}"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
       - name: Set up QEMU (for arm64 emulation)
+        if: steps.platforms.outputs.needs_qemu == 'true'
         uses: docker/setup-qemu-action@v4
 
       - name: Log in to Docker Hub
@@ -165,7 +187,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: ./${{ matrix.folder }}
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ steps.platforms.outputs.platforms }}
           push: true
           pull: true
           tags: |
