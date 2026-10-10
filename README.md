@@ -1,6 +1,6 @@
-# Docker image monorepo
+# builder-tools
 
-A generic, per-folder Docker image builder. Every top-level folder in this
+A generic builder-tools monorepo: per-folder Docker image builds, plus standalone auto-updating builders (see "Non-Docker projects"). Every top-level folder in this
 repo that contains a `Dockerfile` is an independent image: its own Docker
 Hub repository, its own version tag sequence, built and published only when
 that folder actually changes.
@@ -78,6 +78,16 @@ Dockerfile text is unchanged. Enable repository auto-merge and protect `main`.
 | Folder | Docker Hub | What it is |
 |---|---|---|
 | [`claude-code-claudish-happy/`](claude-code-claudish-happy/) | [`sudtanj/claude-code-claudish-happy`](https://hub.docker.com/r/sudtanj/claude-code-claudish-happy) | Claude Code + Codex CLI + Happy (mobile/web control), full dev toolchain - see its own [README](claude-code-claudish-happy/README.md) |
-| [`paseo-codex/`](paseo-codex/) | [`sudtanj/paseo-codex`](https://hub.docker.com/r/sudtanj/paseo-codex) | [Paseo](https://github.com/getpaseo/paseo) (remote daemon + web UI) + Codex CLI + Claude Code CLI, BYOK via env vars in the compose YAML - see its own [README](paseo-codex/README.md) |
+| [`paseo-codex/`](paseo-codex/) | [`sudtanj/paseo-codex`](https://hub.docker.com/r/sudtanj/paseo-codex) | [Paseo](https://github.com/getpaseo/paseo) (remote daemon + web UI) + Codex CLI + Claude Code CLI, BYOK via env vars in the compose YAML, tuned for low-resource hosts (GCP free-tier e2-micro: memory/CPU caps, log rotation, optional agent CLIs) - see its own [README](paseo-codex/README.md) |
 | [`oci-freetier-creator/`](oci-freetier-creator/) | [`sudtanj/oci-freetier-creator`](https://hub.docker.com/r/sudtanj/oci-freetier-creator) | Runs [oracle-freetier-instance-creation](https://github.com/mohankumarpaluru/oracle-freetier-instance-creation) unattended, config via env vars - see its own [README](oci-freetier-creator/README.md) |
 | [`mini-router/`](mini-router/) | [`sudtanj/mini-router`](https://hub.docker.com/r/sudtanj/mini-router) | [mini-router](https://github.com/sudtanj/mini-router): one OpenAI- and Anthropic-compatible endpoint over every LLM provider you use, with pools, spillover and protocol translation - see its own [README](mini-router/README.md) |
+
+## Non-Docker projects
+
+Folders **without** a `Dockerfile` are ignored by the Docker publish workflow
+(it also has a `paths-ignore` for the mi3 folder) and are handled by their own
+workflows.
+
+| Folder | Workflow | What it is |
+|---|---|---|
+| [`mi3-padavan-firmware-builder/`](mi3-padavan-firmware-builder/) | [`mi3-padavan-firmware-builder.yml`](.github/workflows/mi3-padavan-firmware-builder.yml) | Builds Xiaomi Mi 3 [Padavan](https://gitlab.com/hadzhioglu/padavan-ng) firmware. Checks the upstream `stable_master` branch every 6 hours, commits the new hash to `variables` and builds when it changed (also on manual run, pushes to the folder, and `mi3-padavan-firmware-builder-v*` tags). Firmware is an artifact kept 7 days - see its [README](mi3-padavan-firmware-builder/README.md) |

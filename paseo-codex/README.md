@@ -1,7 +1,7 @@
 # paseo-codex
 
 > Part of a multi-image repo - see the [root README](../README.md) for how
-> the generic per-folder build workflow works. Everything below is scoped
+> the generic per-folder build workflow works. Tuned for low-resource hosts such as a GCP free-tier e2-micro (see "GCP free tier" below). Everything below is scoped
 > to this folder; run these commands from inside it
 > (`cd paseo-codex` first if you're at the repo root).
 
