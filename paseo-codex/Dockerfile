@@ -39,10 +39,8 @@ USER root
 COPY --from=builder /opt/agents/ /usr/local/
 COPY --from=builder /usr/local/bin/gh-bin /usr/local/bin/gh
 
-# Low-resource Paseo defaults. /home/paseo is a persistent volume, so this is
-# only a seed: entrypoint.sh copies it to ~/.paseo/config.json on first start
-# and never overwrites an existing config.
-# Disable providers you don't use; add "codex": { "enabled": false } if unused.
+# Clean Paseo defaults relying on native sequential prompt queueing 
+# (concurrency blocks removed to use built-in serial queue behavior).
 COPY --chmod=644 <<'EOF' /usr/local/share/paseo/config.default.json
 {
   "daemon": {
