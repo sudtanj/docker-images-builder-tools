@@ -10,7 +10,7 @@ ARG CLAUDE_CODE_VERSION=latest
 ARG CODEX_VERSION=latest
 ARG GH_VERSION=2.63.2
 ARG TARGETARCH
-# Set to "" to leave an agent CLI out of the image (saves disk and build time).
+# Set to "" to leave an agent CLI out of the image (saves disk, RAM, build time).
 ARG INSTALL_CLAUDE=1
 ARG INSTALL_CODEX=1
 
@@ -35,12 +35,34 @@ FROM ghcr.io/getpaseo/paseo:${PASEO_VERSION}
 USER root
 
 # Same base image => same Node ABI, so native deps copy over safely.
-# Symlinks in /opt/agents/bin are relative, so they survive the move.
 COPY --from=builder /opt/agents/ /usr/local/
 COPY --from=builder /usr/local/bin/gh-bin /usr/local/bin/gh
 
-# Clean Paseo defaults relying on native sequential prompt queueing 
-# (concurrency blocks removed to use built-in serial queue behavior).
+# Low-priority launcher: agents get their own heap cap, lowest CPU priority,
+# and idle I/O class, so the Paseo daemon (and its relay pings) always wins
+# when the shared e2-micro core is contended.
+COPY --chmod=755 <<'EOF' /usr/local/bin/lowprio
+#!/bin/sh
+export NODE_OPTIONS="--max-old-space-size=384"
+real="$1"; shift
+if command -v ionice >/dev/null 2>&1; then
+  exec nice -n 19 ionice -c3 "$real" "$@"
+fi
+exec nice -n 19 "$real" "$@"
+EOF
+
+# Replace each agent CLI with a thin wrapper that goes through lowprio.
+# mv keeps the relative npm symlink valid (same directory).
+RUN for b in claude codex; do \
+      [ -e /usr/local/bin/$b ] || continue; \
+      mv /usr/local/bin/$b /usr/local/bin/$b-real; \
+      printf '%s\n' '#!/bin/sh' \
+        "exec /usr/local/bin/lowprio /usr/local/bin/$b-real \"\$@\"" \
+        > /usr/local/bin/$b; \
+      chmod 755 /usr/local/bin/$b; \
+    done
+
+# Paseo defaults: relay on, everything optional off, minimal logging/disk I/O.
 COPY --chmod=644 <<'EOF' /usr/local/share/paseo/config.default.json
 {
   "daemon": {
@@ -50,7 +72,7 @@ COPY --chmod=644 <<'EOF' /usr/local/share/paseo/config.default.json
   },
   "log": {
     "console": { "level": "warn" },
-    "file": { "level": "info", "rotate": { "maxSize": "5m", "maxFiles": 2 } }
+    "file": { "level": "warn", "rotate": { "maxSize": "5m", "maxFiles": 2 } }
   },
   "agents": {
     "catalogRefreshTimeoutMs": 30000,
@@ -71,9 +93,11 @@ EOF
 COPY --chmod=755 configure-codex-provider.sh /usr/local/bin/configure-codex-provider
 COPY --chmod=755 entrypoint.sh /usr/local/bin/paseo-codex-entrypoint
 
-# Cap Node's heap so it GCs before the kernel OOM-kills it (lower to 384 if
-# needed), and stop Claude Code's background updater/telemetry from doing work.
-ENV NODE_OPTIONS=--max-old-space-size=512 \
+# Daemon gets a small heap (agents override this in their wrapper).
+# Raise to 320 if the daemon itself ever OOMs.
+# Also silence Claude Code background work.
+ENV NODE_OPTIONS=--max-old-space-size=256 \
+    UV_THREADPOOL_SIZE=2 \
     DISABLE_AUTOUPDATER=1 \
     DISABLE_TELEMETRY=1 \
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
